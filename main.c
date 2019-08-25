@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 //STRUCT DECLARATIONS
 typedef struct variable_struct{
@@ -32,6 +33,11 @@ void addToVariableList(char *variable_name, int variable_value);
 void addToLabelList(char *label_name, int label_address);
 Variable *createVariable(char *variable_name, int variable_value);
 Label *createLabel(char *label_name, int label_address);
+char *removeSpaces(char *string);
+void run();
+void ldiInstruction();
+Variable *isVariable(char *name);
+Label *isLabel(char *name);
 void freeMemory();
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +45,10 @@ void freeMemory();
 //GLOBAL DECLARATIONS
 Variable *variables = NULL;
 Label *labels = NULL;
+
 char program[1000][50];
+int pc = 0;
+long regs[4];
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,6 +58,7 @@ int main(){
 
     readDataSection(instructions);
     readCodeSection(instructions);
+    run();
 
     freeMemory();
 
@@ -114,7 +124,6 @@ void readCodeSection(FILE *instructions){
     char line[100];
     char preserve_line[100];
     char *token = NULL;
-    int pc = 0;
 
     while(fgets(line, sizeof line, instructions) != NULL){
 
@@ -125,12 +134,27 @@ void readCodeSection(FILE *instructions){
 
             if(isInstruction(token)){
 
-                strcpy(program[pc], strtok(preserve_line, "\n\r"));
+                strcpy(program[pc], removeSpaces(preserve_line));
                 pc++;
             }
             else{ //LABEL
 
-                addToLabelList(token, pc);
+                strcpy(preserve_line, token);
+                //Lets check if the next word is a valid instruction.
+                token = strtok(NULL, "\n\t\r ");
+
+                if(token == NULL && fgets(line, sizeof line, instructions) != NULL)
+                    token = strtok(line, "\n\t\r ");
+
+                if(isInstruction(token)){
+                    addToLabelList(preserve_line, pc);
+                    continue;
+                }
+                else{
+
+                    printf("An invalid instruction has been entered!\n");
+                    exit(-1);
+                }
             }
 
             token = strtok(NULL, "\n\t\r ");
@@ -222,9 +246,168 @@ Label *createLabel(char *label_name, int label_address){
     return label;
 }
 
+char *removeSpaces(char *string){
+
+    char *newString = strtok(string, "\n\r");
+
+    while(isspace(*newString)) // NOLINT
+        newString++;
+
+    return newString;
+}
+
 void run(){
 
+    char *instruction, *op1, *op2, *op3;
+    int regNumber;
+    long op2Location;
+    long *address;
 
+    for(int current_pc = 0; current_pc < pc; current_pc++){
+
+        instruction = strtok(program[current_pc], " ");
+
+        if(strcmp(instruction, "ldi") == 0 || strcmp(instruction, "LDI") == 0){
+
+            ldiInstruction();
+        }
+        else if(strcmp(instruction, "ld") == 0 || strcmp(instruction, "LD") == 0){
+
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
+
+            regNumber = (int) strtol(op1, NULL, 10);
+            op2Location = regs[(int) strtol(op2, NULL, 10)];
+            address = (long *) op2Location;
+
+            regs[regNumber] = *address;
+        }
+        else if(strcmp(instruction, "st") == 0 || strcmp(instruction, "ST") == 0){
+
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
+
+            regNumber = (int) strtol(op1, NULL, 10);
+            op2Location = regs[(int) strtol(op2, NULL, 10)];
+            address = (long *) op2Location;
+
+            *address = regs[regNumber];
+        }
+        else if(strcmp(instruction, "jz") == 0 || strcmp(instruction, "JZ") == 0){
+
+
+        }
+        else if(strcmp(instruction, "jmp") == 0 || strcmp(instruction, "JMP") == 0){
+
+
+        }
+        else if(strcmp(instruction, "add") == 0 || strcmp(instruction, "ADD") == 0){
+
+
+        }
+        else if(strcmp(instruction, "sub") == 0 || strcmp(instruction, "SUB") == 0){
+
+
+        }
+        else if(strcmp(instruction, "and") == 0 || strcmp(instruction, "AND") == 0){
+
+
+        }
+        else if(strcmp(instruction, "or") == 0 || strcmp(instruction, "OR") == 0){
+
+
+        }
+        else if(strcmp(instruction, "xor") == 0 || strcmp(instruction, "XOR") == 0){
+
+
+        }
+        else if(strcmp(instruction, "not") == 0 || strcmp(instruction, "NOT") == 0){
+
+
+        }
+        else if(strcmp(instruction, "mov") == 0 || strcmp(instruction, "MOV") == 0){
+
+
+        }
+        else if(strcmp(instruction, "inc") == 0 || strcmp(instruction, "INC") == 0){
+
+
+        }
+        else if(strcmp(instruction, "dec") == 0 || strcmp(instruction, "DEC") == 0){
+
+
+        }
+    }
+}
+
+void ldiInstruction(){
+
+    char *op1, *op2;
+    int regNumber;
+
+    op1 = strtok(NULL, " ");
+    op2 = strtok(NULL, " ");
+
+    regNumber = (int) strtol(op1, NULL, 10);
+
+    if(op2[0] == '0' && op2[1] == 'x')
+        regs[regNumber] = strtol(op2 + 2, NULL, 16);
+    else if((op2[0] == '-' && (op2[1] >= 48 && op2[1] <= 57)) || (op2[0] >= 48 && op2[0] <= 57))
+        regs[regNumber] = strtol(op2, NULL, 10);
+    else{
+
+        //Means this is a variable or label.
+        Variable *variable = isVariable(op2);
+
+        if(variable != NULL){
+
+            //Means this is a variable.
+            regs[regNumber] = (long) variable->value;
+        }
+        else{
+
+            //Then it must be a label.
+            Label *label = isLabel(op2);
+
+            if(label != NULL){
+
+                //Means this is a label.
+                regs[regNumber] = label->address;
+            }else{
+
+                printf("Instructions contain invalid label or variable!!!");
+                exit(-1);
+            }
+        }
+    }
+}
+
+Variable *isVariable(char *name){
+
+    Variable *currentVariable = variables;
+    while(currentVariable != NULL){
+
+        if(strcmp(name, currentVariable->name) == 0)
+            break;
+
+        currentVariable = currentVariable->next;
+    }
+
+    return currentVariable;
+}
+
+Label *isLabel(char *name){
+
+    Label *currentLabel = labels;
+    while(currentLabel != NULL){
+
+        if(strcmp(name, currentLabel->name) == 0)
+            break;
+
+        currentLabel = currentLabel->next;
+    }
+
+    return currentLabel;
 }
 
 void freeMemory(){
