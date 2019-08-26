@@ -107,7 +107,7 @@ void readDataSection(FILE *instructions){
             variable_data = strtok(NULL, "\n\t\r ");
 
             //If this is an array...
-            if(strcmp(variable_data, ".space") == 0){
+            if(variable_data != NULL && strcmp(variable_data, ".space") == 0){
 
                 array_size = strtok(NULL, "\n\t\r ");
                 addToVariableList(variable_name, 0, (int) strtol(array_size, NULL, 10));
@@ -129,6 +129,7 @@ void readCodeSection(FILE *instructions){
 
     char line[100];
     char preserve_line[100];
+    char previous_token[100];
     char *token = NULL;
 
     while(fgets(line, sizeof line, instructions) != NULL){
@@ -145,21 +146,36 @@ void readCodeSection(FILE *instructions){
             }
             else{ //LABEL
 
-                strcpy(preserve_line, token);
+                strcpy(previous_token, token);
                 //Lets check if the next word is a valid instruction.
                 token = strtok(NULL, "\n\t\r ");
 
-                if(token == NULL && fgets(line, sizeof line, instructions) != NULL)
+                if(token == NULL && fgets(line, sizeof line, instructions) != NULL){
+                    strcpy(preserve_line, line);
                     token = strtok(line, "\n\t\r ");
 
-                if(isInstruction(token)){
-                    addToLabelList(preserve_line, pc);
-                    continue;
-                }
-                else{
+                    if(isInstruction(token)){
+                        addToLabelList(previous_token, pc);
+                        continue;
+                    }
+                    else{
 
-                    printf("An invalid instruction has been entered!\n");
-                    exit(-1);
+                        printf("An invalid instruction has been entered!\n");
+                        exit(-1);
+                    }
+                }else{
+
+                    if(isInstruction(token)){
+                        addToLabelList(previous_token, pc);
+                        char *ret = strchr(removeSpaces(preserve_line), ' ');
+                        strcpy(preserve_line, (ret + 1));
+                        continue;
+                    }
+                    else{
+
+                        printf("An invalid instruction has been entered!\n");
+                        exit(-1);
+                    }
                 }
             }
 
@@ -275,15 +291,14 @@ char *removeSpaces(char *string){
 
 void run(){
 
-    char *instruction, *op1, *op2, *op3;
-    int regNumber;
-    int zeroFlag = 0;
-    long op2Location, op2Value, op3Value;
-    long *address;
+    char full_instruction[100], *instruction, *op1, *op2, *op3;
+    int regNumber, zeroFlag = 0;
+    long op2Location, op2Value, op3Value, *address;
 
     for(int current_pc = 0; current_pc < pc; current_pc++){
 
-        instruction = strtok(program[current_pc], " ");
+        strcpy(full_instruction, program[current_pc]);
+        instruction = strtok(full_instruction, " ");
 
         if(strcmp(instruction, "ldi") == 0 || strcmp(instruction, "LDI") == 0){
 
@@ -299,6 +314,9 @@ void run(){
             address = (long *) op2Location;
 
             regs[regNumber] = *address;
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "st") == 0 || strcmp(instruction, "ST") == 0){
 
@@ -539,14 +557,17 @@ void print(){
 
     printf("\nREGISTER CONTENTS:\n");
     for(i = 0; i < 4; i++)
-        printf("Register %d : %ld\n", i, regs[i]);
+        printf("Register %d : 0x%04hx\n", i, (short) regs[i]);
 
     printf("\nDATA MEMORY CONTENTS:\n");
     Variable *currentVariable = variables;
     while(currentVariable != NULL){
 
-        for(i = 0; i < currentVariable->arraySize; i++)
-            printf("%s[%d] : %d\n", currentVariable->name, i, *((currentVariable->value) + i));
+        if(currentVariable->arraySize > 1)
+            for(i = 0; i < currentVariable->arraySize; i++)
+                printf("%s[%d] : 0x%04hx\n", currentVariable->name, i, (short) *((currentVariable->value) + i));
+        else
+            printf("%s : 0x%04hx\n", currentVariable->name, (short) *(currentVariable->value));
 
         currentVariable = currentVariable->next;
     }
