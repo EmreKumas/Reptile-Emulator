@@ -38,6 +38,7 @@ void run();
 void ldiInstruction();
 Variable *isVariable(char *name);
 Label *isLabel(char *name);
+int findJumpAddress(char *labelName);
 void freeMemory();
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -260,6 +261,7 @@ void run(){
 
     char *instruction, *op1, *op2, *op3;
     int regNumber;
+    int zeroFlag = 0;
     long op2Location;
     long *address;
 
@@ -295,47 +297,125 @@ void run(){
         }
         else if(strcmp(instruction, "jz") == 0 || strcmp(instruction, "JZ") == 0){
 
+            op1 = strtok(NULL, " ");
 
+            //Now, we need to find the correct label to jump.
+            int jumpAddress = findJumpAddress(op1);
+
+            //Since this is jump_zero we need to make sure that previous instructions result is zero.
+            if(zeroFlag)
+                current_pc = jumpAddress - 1;
         }
         else if(strcmp(instruction, "jmp") == 0 || strcmp(instruction, "JMP") == 0){
 
+            op1 = strtok(NULL, " ");
 
+            //Now, we need to find the correct label to jump.
+            int jumpAddress = findJumpAddress(op1);
+
+            current_pc = jumpAddress - 1;
         }
         else if(strcmp(instruction, "add") == 0 || strcmp(instruction, "ADD") == 0){
 
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
+            op3 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op2, NULL, 10) + (int) strtol(op3, NULL, 10);
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "sub") == 0 || strcmp(instruction, "SUB") == 0){
 
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
+            op3 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op2, NULL, 10) - (int) strtol(op3, NULL, 10);
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "and") == 0 || strcmp(instruction, "AND") == 0){
 
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
+            op3 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op2, NULL, 10) & (int) strtol(op3, NULL, 10); // NOLINT
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "or") == 0 || strcmp(instruction, "OR") == 0){
 
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
+            op3 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op2, NULL, 10) | (int) strtol(op3, NULL, 10); // NOLINT
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "xor") == 0 || strcmp(instruction, "XOR") == 0){
 
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
+            op3 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op2, NULL, 10) ^ (int) strtol(op3, NULL, 10); // NOLINT
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "not") == 0 || strcmp(instruction, "NOT") == 0){
 
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = ~((int) strtol(op2, NULL, 10)); // NOLINT
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "mov") == 0 || strcmp(instruction, "MOV") == 0){
 
+            op1 = strtok(NULL, " ");
+            op2 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op2, NULL, 10);
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "inc") == 0 || strcmp(instruction, "INC") == 0){
 
+            op1 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op1, NULL, 10) + 1;
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "dec") == 0 || strcmp(instruction, "DEC") == 0){
 
+            op1 = strtok(NULL, " ");
 
+            regNumber = (int) strtol(op1, NULL, 10);
+            regs[regNumber] = (int) strtol(op1, NULL, 10) - 1;
+
+            if(regs[regNumber] == 0) zeroFlag = 1;
+            else zeroFlag = 0;
         }
     }
 }
@@ -408,6 +488,21 @@ Label *isLabel(char *name){
     }
 
     return currentLabel;
+}
+
+int findJumpAddress(char *labelName){
+
+    Label *currentLabel = labels;
+
+    while(currentLabel != NULL){
+
+        if(strcmp(labelName, currentLabel->name) == 0)
+            break;
+
+        currentLabel = currentLabel->next;
+    }
+
+    return currentLabel != NULL ? currentLabel->address : -1;
 }
 
 void freeMemory(){
