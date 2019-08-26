@@ -10,6 +10,7 @@ typedef struct variable_struct{
 
     char *name;
     int *value;
+    int arraySize;
     struct variable_struct *next;
 
 } Variable;
@@ -29,9 +30,9 @@ FILE *readFile();
 void readDataSection(FILE *instructions);
 void readCodeSection(FILE *instructions);
 bool isInstruction(char *input);
-void addToVariableList(char *variable_name, int variable_value);
+void addToVariableList(char *variable_name, int variable_value, int array_size);
 void addToLabelList(char *label_name, int label_address);
-Variable *createVariable(char *variable_name, int variable_value);
+Variable *createVariable(char *variable_name, int variable_value, int array_size);
 Label *createLabel(char *label_name, int label_address);
 char *removeSpaces(char *string);
 void run();
@@ -39,6 +40,7 @@ void ldiInstruction();
 Variable *isVariable(char *name);
 Label *isLabel(char *name);
 int findJumpAddress(char *labelName);
+void print();
 void freeMemory();
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,6 +62,7 @@ int main(){
     readDataSection(instructions);
     readCodeSection(instructions);
     run();
+    print();
 
     freeMemory();
 
@@ -85,6 +88,7 @@ void readDataSection(FILE *instructions){
     char line[100];
     char *variable_name = NULL;
     char *variable_data = NULL;
+    char *array_size = NULL;
 
     while(fgets(line, sizeof line, instructions) != NULL){
 
@@ -105,16 +109,17 @@ void readDataSection(FILE *instructions){
             //If this is an array...
             if(strcmp(variable_data, ".space") == 0){
 
-                ///////////////////////////TO DO
+                array_size = strtok(NULL, "\n\t\r ");
+                addToVariableList(variable_name, 0, (int) strtol(array_size, NULL, 10));
             }else{
 
                 if(variable_data == NULL)
-                    addToVariableList(variable_name, 0);
+                    addToVariableList(variable_name, 0, 1);
                 else if((variable_data[0] == '0') && (variable_data[1] == 'x'))
-                    addToVariableList(variable_name, ((int) strtol(variable_data, NULL, 16)));
+                    addToVariableList(variable_name, ((int) strtol(variable_data, NULL, 16)), 1);
                 else if((variable_data[0] == '-' && (variable_data[1] >= 48 && variable_data[1] <= 57)) ||
                         (variable_data[0] >= 48 && variable_data[0] <= 57))
-                    addToVariableList(variable_name, ((int) strtol(variable_data, NULL, 10)));
+                    addToVariableList(variable_name, ((int) strtol(variable_data, NULL, 10)), 1);
             }
         }
     }
@@ -171,16 +176,16 @@ bool isInstruction(char *input){
     return (strcmp(input, "ldi") == 0) || (strcmp(input, "LDI") == 0) || (strcmp(input, "ld") == 0) || (strcmp(input, "LD") == 0) ||
            (strcmp(input, "st") == 0) || (strcmp(input, "ST") == 0) || (strcmp(input, "jz") == 0) || (strcmp(input, "JZ") == 0) ||
            (strcmp(input, "jmp") == 0) || (strcmp(input, "JMP") == 0) || (strcmp(input, "add") == 0) || (strcmp(input, "ADD") == 0) ||
-           (strcmp(input, "sub") == 0) || (strcmp(input, "SUB") == 0) || (strcmp(input, "AND") == 0) || (strcmp(input, "AND") == 0) ||
+           (strcmp(input, "sub") == 0) || (strcmp(input, "SUB") == 0) || (strcmp(input, "and") == 0) || (strcmp(input, "AND") == 0) ||
            (strcmp(input, "or") == 0) || (strcmp(input, "OR") == 0) || (strcmp(input, "xor") == 0) || (strcmp(input, "XOR") == 0) ||
            (strcmp(input, "not") == 0) || (strcmp(input, "NOT") == 0) || (strcmp(input, "mov") == 0) || (strcmp(input, "MOV") == 0) ||
            (strcmp(input, "inc") == 0) || (strcmp(input, "INC") == 0) || (strcmp(input, "dec") == 0) || (strcmp(input, "DEC") == 0);
 }
 
-void addToVariableList(char *variable_name, int variable_value){
+void addToVariableList(char *variable_name, int variable_value, int array_size){
 
     if(variables == NULL)
-        variables = createVariable(variable_name, variable_value);
+        variables = createVariable(variable_name, variable_value, array_size);
     else{
 
         Variable *current_variable = variables;
@@ -191,7 +196,7 @@ void addToVariableList(char *variable_name, int variable_value){
             current_variable = current_variable->next;
         }
 
-        current_variable = createVariable(variable_name, variable_value);
+        current_variable = createVariable(variable_name, variable_value, array_size);
         previous_variable->next = current_variable;
     }
 }
@@ -215,7 +220,7 @@ void addToLabelList(char *label_name, int label_address){
     }
 }
 
-Variable *createVariable(char *variable_name, int variable_value){
+Variable *createVariable(char *variable_name, int variable_value, int array_size){
 
     Variable *variable = malloc(sizeof variable);
 
@@ -223,9 +228,20 @@ Variable *createVariable(char *variable_name, int variable_value){
     strcpy(name, variable_name);
     variable->name = name;
 
-    int *address = malloc(sizeof(int *));
-    variable->value = address;
-    *(variable->value) = variable_value;
+    if(array_size == 1){
+
+        int *address = malloc(sizeof(int));
+        variable->value = address;
+        *(variable->value) = variable_value;
+        variable->arraySize = 1;
+    }else{
+
+        int *address = malloc(array_size * sizeof(int));
+        variable->value = address;
+        variable->arraySize = array_size;
+
+        for(int i = 0; i < array_size; i++) variable->value[i] = 0;
+    }
 
     variable->next = NULL;
 
@@ -262,7 +278,7 @@ void run(){
     char *instruction, *op1, *op2, *op3;
     int regNumber;
     int zeroFlag = 0;
-    long op2Location;
+    long op2Location, op2Value, op3Value;
     long *address;
 
     for(int current_pc = 0; current_pc < pc; current_pc++){
@@ -322,7 +338,9 @@ void run(){
             op3 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op2, NULL, 10) + (int) strtol(op3, NULL, 10);
+            op2Value = regs[(int) strtol(op2, NULL, 10)];
+            op3Value = regs[(int) strtol(op3, NULL, 10)];
+            regs[regNumber] = op2Value + op3Value;
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -334,7 +352,9 @@ void run(){
             op3 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op2, NULL, 10) - (int) strtol(op3, NULL, 10);
+            op2Value = regs[(int) strtol(op2, NULL, 10)];
+            op3Value = regs[(int) strtol(op3, NULL, 10)];
+            regs[regNumber] = op2Value - op3Value;
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -346,7 +366,9 @@ void run(){
             op3 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op2, NULL, 10) & (int) strtol(op3, NULL, 10); // NOLINT
+            op2Value = regs[(int) strtol(op2, NULL, 10)];
+            op3Value = regs[(int) strtol(op3, NULL, 10)];
+            regs[regNumber] = op2Value & op3Value; // NOLINT
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -358,7 +380,9 @@ void run(){
             op3 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op2, NULL, 10) | (int) strtol(op3, NULL, 10); // NOLINT
+            op2Value = regs[(int) strtol(op2, NULL, 10)];
+            op3Value = regs[(int) strtol(op3, NULL, 10)];
+            regs[regNumber] = op2Value | op3Value; // NOLINT
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -370,7 +394,9 @@ void run(){
             op3 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op2, NULL, 10) ^ (int) strtol(op3, NULL, 10); // NOLINT
+            op2Value = regs[(int) strtol(op2, NULL, 10)];
+            op3Value = regs[(int) strtol(op3, NULL, 10)];
+            regs[regNumber] = op2Value ^ op3Value; // NOLINT
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -381,7 +407,8 @@ void run(){
             op2 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = ~((int) strtol(op2, NULL, 10)); // NOLINT
+            op2Value = regs[(int) strtol(op2, NULL, 10)];
+            regs[regNumber] = ~op2Value; // NOLINT
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -392,7 +419,8 @@ void run(){
             op2 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op2, NULL, 10);
+            op2Value = regs[(int) strtol(op2, NULL, 10)];
+            regs[regNumber] = op2Value;
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -402,7 +430,7 @@ void run(){
             op1 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op1, NULL, 10) + 1;
+            regs[regNumber] = regs[regNumber] + 1;
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -412,7 +440,7 @@ void run(){
             op1 = strtok(NULL, " ");
 
             regNumber = (int) strtol(op1, NULL, 10);
-            regs[regNumber] = (int) strtol(op1, NULL, 10) - 1;
+            regs[regNumber] = regs[regNumber] - 1;
 
             if(regs[regNumber] == 0) zeroFlag = 1;
             else zeroFlag = 0;
@@ -503,6 +531,25 @@ int findJumpAddress(char *labelName){
     }
 
     return currentLabel != NULL ? currentLabel->address : -1;
+}
+
+void print(){
+
+    int i;
+
+    printf("\nREGISTER CONTENTS:\n");
+    for(i = 0; i < 4; i++)
+        printf("Register %d : %ld\n", i, regs[i]);
+
+    printf("\nDATA MEMORY CONTENTS:\n");
+    Variable *currentVariable = variables;
+    while(currentVariable != NULL){
+
+        for(i = 0; i < currentVariable->arraySize; i++)
+            printf("%s[%d] : %d\n", currentVariable->name, i, *((currentVariable->value) + i));
+
+        currentVariable = currentVariable->next;
+    }
 }
 
 void freeMemory(){
