@@ -314,9 +314,6 @@ void run(){
             address = (long *) op2Location;
 
             regs[regNumber] = *address;
-
-            if(regs[regNumber] == 0) zeroFlag = 1;
-            else zeroFlag = 0;
         }
         else if(strcmp(instruction, "st") == 0 || strcmp(instruction, "ST") == 0){
 
