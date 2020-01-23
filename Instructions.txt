@@ -1,15 +1,19 @@
 .data
-    N: 60
+    N: 10
     sum:
 .code
     ldi 0 N
     ld 0 0
     jz out
-loop
-    inc 1
+loop inc 1
     add 2 2 1
     dec 0
     jz out
+    inc 1
+    sub 2 2 1
+    dec 0
+    jz out
     jmp loop
-    out ldi 0 sum
+out
+    ldi 0 sum
     st 2 0
